@@ -1,10 +1,34 @@
-################################################
-#	Projeto ecologia térmica mosquitos
-#		by Gabriel e Guilherme
-#		ssantos.gabriel@gmail.com
-#			12 setembro 2024
-################################################
+---
+title: "A general framework to run analyses in Dias et al.xxxxx"
+author:
+  - Gabriel Santos 
+  - Guilherme Sanches
+date: "last time knit: `r format(Sys.time(),  '%Y-%m-%d (%H:%M:%S)')`"
+output: 
+  html_notebook:
+    theme: paper 
+    code_folding: hide    
+    toc: yes
+    toc_float:
+      collapsed: true
+    cache: FALSE
+---
 
+```{r, echo=FALSE, cache=FALSE}
+knitr::opts_chunk$set(out.width=14,digits = 3)
+options(scipen = 1, digits = 3) 
+## numbers >= 10^5 will be denoted in scientific notation,
+## and rounded to 2 digits
+
+```
+
+# Readme
+
+# Setting & SessionInfo
+
+Define packages used in this paper
+
+```{r message=FALSE, warning=FALSE, result='hide'}
 library(openxlsx)
 library(car)
 library(performance)
@@ -18,35 +42,67 @@ library(sjPlot)
 library(ggplot2)
 library(ggeffects)
 
-rm(list=ls())
-
 options(na.action=na.fail)	#Define na action to run dredge function from MuMIn
+```
 
-#==========================================================
-#	Define diretório
-#==========================================================
+Show full information about R, packages and its dependences
 
-#setwd(choose.dir())	#Usar esse Guilherme!
+```{r}
+sessionInfo()
+```
+
+# Load data {.tabset}
+
+<!-- 
+#setwd(choose.dir())    #Usar esse Guilherme!
 #setwd("C:/Artigos e resumos publicados submetidos ideias/Notes/1 - Projetos/01 - Colaborações em projetos e artigos em desenvolvimento/Projetos Jeronimo - Fiocruz")
 #dir("./Dados e scripts")
 #dados<-read.xlsx("./Dados e scripts/Book1.xlsx",sheet="Goias_CLEAN_2")
-#dados_eclosion<-read.xlsx("./Dados e scripts/Experimento 1 (Temperatura).xlsx",sheet="Ovitrampa Goiás ")	#Tem um "espaço a mais na aba ovitrampa Goiais, cuidado!
+#dados_eclosion<-read.xlsx("./Dados e scripts/Experimento 1 (Temperatura).xlsx",sheet="Ovitrampa Goiás ")   #Tem um "espaço a mais na aba ovitrampa Goiais, cuidado!
+-->
 
+## Data development
+
+Overview data for individual development
+
+> Metadata:
+> -   Etiqueta: a ID code of the individual
+> -   Imersion to Adulto: data stage was first recorded
+>     -   Note data in Imersion to Adult represent dates and must be
+>         converted properly!
+> -   SP: species - Sexo: Sex - Temp: Temperature individual developed
+> -   Locality
+> -   ID: Is a full ID include etiqueta, temperature, species and
+>     locality
+> -   Days to change ontogenetic stage
+>     -   L2_L1 means, Become stage L2 from stage L1
+>     -   L3_L2 means, Become stage L3 from stage L2
+>     -   Adulto_Imersion represent the total number of days from first
+>         immersion to adult stage
+>     -   So on...
+
+```{r}
 dados<-read.xlsx("Book1.xlsx",sheet="Goias_CLEAN_2")
-dados_eclosion<-read.xlsx("Experimento 1 (Temperatura).xlsx",sheet="Ovitrampa Goiás ")	#Tem um "espaço a mais na aba ovitrampa Goiais, cuidado!
+  dados<-dados%>%select(-L1_IMERSION)
 
+dados
+```
 
-dados%>%glimpse()
-dados<-dados%>%select(-L1_IMERSION)
+## Data eclosion
 
-dados_eclosion%>%glimpse()
+```{r}
+dados_eclosion<-read.xlsx("Experimento 1 (Temperatura).xlsx",sheet="Ovitrampa Goiás ") #Tem um "espaço a mais na aba ovitrampa Goiais, cuidado!
 
-#==========================================================
-#	ECLOSION MODEL
-#==========================================================
+dados_eclosion 
+```
+
+# Eclosion model
+
+## Data preparation
+
+```{r}
 dados_eclosion$Temperatura<-c(25,30,30,20,20,20,20,15,15,15,15)	#Necessário para tirar o "ºC"
 
-dados_eclosion%>%select(Total.de.ovos,Ovos.eclodidos,Temperatura)
 dados_eclosion$Temperatura<-as.numeric(dados_eclosion$Temperatura)
 
 dados_eclosion%>%
@@ -54,54 +110,106 @@ group_by(Temperatura)%>%
 summarise(Eclosion_rate=mean((Ovos.eclodidos/Total.de.ovos)*100),
 sd=sd((Ovos.eclodidos/Total.de.ovos)*100),
 N=n())
+```
 
+## Model implementation
+
+### Full model and model selection
+
+```{r}
 eclosion_mod<-glm(cbind(Ovos.eclodidos,Total.de.ovos)~
               Temperatura+I(Temperatura^2),family = binomial("logit"),data=dados_eclosion)
 
-
 dredge(eclosion_mod)
+```
 
-#-------------------------------------------------------------------------------
-# Modelo validation
-#-------------------------------------------------------------------------------
+### Best Model validation
+
+Best models is the full model so no additional script is necessary
+
+```{r}
 simulateResiduals(eclosion_mod, plot =F)%>%testResiduals()
-#-------------------------------------------------------------------------------
-ggpredict(eclosion_mod,se=TRUE)
+```
+
+## Model validation
+```{r}
+simulateResiduals(eclosion_mod, plot =F)%>%testResiduals()
+
+```
+
+
+## Model inference
+
+Now, use the best model to drawn conclusions
+
+### Summary
+
+```{r}
+summary(eclosion_mod)
+```
+
+### Optimum temperature
+
+Values predicted by best model was extract for temperature from 20ºC to
+30ºC by 0.5ºC intervals x is x-axis value, it means, temperature in this
+case
+
+Optimum temperature is
+
+```{r}
 eclosion_mod_pred<-ggpredict(eclosion_mod, terms = c("Temperatura[20:30,by=.5]"))
-eclosion_mod_pred[[1]]
 
 eclosion_mod_pred%>%as.tibble()%>%
-	slice_max(predicted,n = 5)%>%arrange(x)
+	slice_max(predicted,n = 5)%>%arrange(x)%>%select(-group) #x is temperature
 
+```
+
+### Plot
+
+```{r}
 plot_model(eclosion_mod, type = "pred", terms = "Temperatura[15:30]",show.data = T,colors = "bw")+
 xlab("Temperature")+ylab("Egg hatching probability")+
 labs(title=NULL)+
 theme_bw(base_size=16)
+```
 
+# Eggs survival
 
-#==========================================================
-#	ECLOSION MODEL
-#==========================================================
+<!--# Curiosamente, apesar do baixo N amostral, o modelo apresentou uma boa performance. Mesmo assim não será utilizado pois não incorpora novas informações que jã não possam ser retiradas do modelo de eclosão-->
 
+## Data preparation
+
+```{r}
 surv <- data.frame(
   Vivos = c(7, 109, 80),
   Mortos = c(3, 19, 14),
   Temperatura = c(20, 25, 30))%>%
 mutate(Total=Vivos+Mortos)
 
-surv 
+surv
+```
 
+## Model implementation and validation
+
+A simple glm with binomial distribution was used
+
+DHARMa package was used because there is very few observation and the
+`DHARMa::imulateResiduals` function improves performance in this case
+
+```{r}
 mod_surv<-glm(cbind(Mortos,Total)~
         Temperatura+I(Temperatura^2),family = binomial("logit"),data=surv)
 
 dredge(mod_surv)
 
-#-------------------------------------------------------------------------------
 # Modelo validation
-#-------------------------------------------------------------------------------
 simulateResiduals(mod_surv, plot =F)%>%testResiduals()
-#-------------------------------------------------------------------------------
 
+```
+
+## Model inference
+
+```{r}
 mod_surv%>%parameters::parameters()
 
 
@@ -110,20 +218,25 @@ xlab("Temperature")+ylab("Survival probability")+
 labs(title=NULL)+
 theme_bw(base_size=16)
 
+```
 
-#==========================================================
-#	DEVELOPMENT
-#==========================================================
+# Development
+
+## Data preparation
+
+```{r}
 dados_long<-dados%>%
 	select(SEXO,temp,L2_L1:ADULTO_IMERSION)%>%
 		pivot_longer(!c(SEXO,temp),
 			names_to="Transition",values_to="Days")%>%
 filter(Transition!="ADULTO_IMERSION")	# Need to be removed to avoid being double accounted
 
+dados_long
+```
 
-#----------------------------------------------------------
-#	Data summary and standardization
-#----------------------------------------------------------
+### Data summary and standardization
+
+```{r}
 dados%>%
 	select(SEXO,temp,L2_L1:ADULTO_IMERSION)%>%
 		pivot_longer(!c(SEXO,temp),
@@ -137,63 +250,129 @@ dados%>%
 			low95=quantile(Days,0.025),
 			high95=quantile(Days,0.975))%>%
 							data.frame()
+
+```
+
+### Data transformation
+
+Necessary step to reduce dispersion and make ontogenic stages comparable
+
+```{r}
+# Log transformation to reduce dispersion
+dados_log<-dados %>%
+  mutate(SEXO=as.factor(SEXO))%>%  
+  mutate(across(L2_L1:ADULTO_IMERSION,log))
+
+#z-score transformation to make models among different stages comparable
+dados_std<-dados %>%
+  mutate(SEXO=as.factor(SEXO))%>%  
+  mutate(across(L2_L1:ADULTO_IMERSION,scale))
+
+
+dados_std
+dados_log
+
+```
+
+
+
+<!--
+Aqui foi feito um modelo global onde Dias ~ temp + Sexo * Transition. 
+
+## Model implementation and model selection
+
 #----------------------------------------------------------
 #	Global model
 #----------------------------------------------------------
 # Fit the full model
 model_full<-glm(Days~temp+SEXO*Transition+I(temp^2)*SEXO*Transition,family="poisson",data=dados_long)
 
+dredge(model_full)%>%head(n=5) 
+
+Select best model
 # Extract best model according to AIC
 best_full<-model_full%>%
 	dredge%>%
 		get.models(., subset = 1)
 
 
+### Best model validation & summary
+
 bestfull_glm<-glm(formula(best_full[[1]]),data=dados_long)
 
-bestfull_glm%>%summary()
-bestfull_glm%>%anova()
+bestfull_glm%>%anova() #Check what covariates are significantly different than 0
+
 
 plot_model(bestfull_glm, type = "pred", terms = c("temp[20:30]","Transition"),show.data = F)
 
-#Full model did not pass model assumptions
+
+#### Full model did not pass model assumptions
+Uniformity: not passed
+Dispersion: passed
+Outliers: not passed
+
+
 simulateResiduals(bestfull_glm, plot =F)%>%testResiduals()
 
-#----------------------------------------------------------
-#	DATA TRANSFORMATION
-#----------------------------------------------------------
+-->
 
-# Log transformation to reduce dispersion
-dados_log<-dados %>%
-  mutate(across(L2_L1:ADULTO_IMERSION,log))
 
-#z-score transformation to make models among different stages comparable
-dados_std<-dados %>%
-  mutate(across(L2_L1:ADULTO_IMERSION,scale))
 
-#----------------------------------------------------------
+## Model immersion to adult
+
+Assess how temperature and sex driven the time to adulthood from first
+time immersion
+
+<!--
+Prestar atenção:
+best_alldev include all variables (the global model).
+Os modelos construídos para cada estágio foram incluídos no objeto mod_trans
+-->
+
+
+```{r}
 #	MODEL - Full development
-#----------------------------------------------------------
 modeloADULTO_IMERSAO <- glm(ADULTO_IMERSION ~ SEXO+temp+I(temp^2), data = dados_log)
+```
 
 
-#Multi model selectio
+### Model selection and validation
+
+```{r}
+#Multi model selection
 dredge_out<-dredge(modeloADULTO_IMERSAO)
 dredge_out
+```
 
+```{r}
 best_alldev<-get.models(dredge_out, subset = 1)
 
 best_alldev[[1]]%>%parameters::parameters()
 best_alldev[[1]]%>%anova()
+```
 
-simulateResiduals(best_alldev[[1]],plot=T)
+<!-- 
 #Warning message "Context: nKcase - wrong family"
-#This message appear because values still looking like discretized after log and poisson
+#This message appear because values still looking like discretized after log and poisson 
+-->
+
+```{r message=TRUE, warning=TRUE}
+simulateResiduals(best_alldev[[1]],plot=T)
+```
 
 
-best_alldev_glm<-glm(ADULTO_IMERSION ~ SEXO + temp + I(temp^2),data=dados_log)
+Ainda que o modelo não tenha se adequado a todos os pressupostos, essa diferença parece ser mínima e o modelo parece ter apresentado um bom ajuste quando olhamos os resíduos dos valores ajustados 
 
-plot_model(best_alldev_glm, type = "pred", terms = c("temp[20:30]","SEXO"),show.data = T)
+
+```{r}
+hist(best_alldev[[1]]$residuals,xlab="Residuals",main=NULL)
+```
+
+
+
+### Plot
+
+```{r message=FALSE, warning=FALSE}
 
 plot_model(best_alldev_glm, show.data = T , jitter = .3,
 	type = "pred", terms = c("temp[20:30]","SEXO"),transform)+
@@ -210,27 +389,38 @@ theme_bw(base_size=16)+
 #    labels = function(x) scales::label_number()(exp(x)))+
   scale_x_continuous(
     breaks = seq(20,30,by=5))
+```
 
+Valores preditos
 
+```{r message=FALSE, warning=FALSE}
 ggpredict(best_alldev_glm,,terms = c("temp[20,25,30]"))%>%
   data.frame()%>%
   mutate(across(c(predicted, conf.low, conf.high), exp))  
-  
+
+
+# Considering sex
 best_alldev_pred<-ggpredict(best_alldev_glm,,terms = c("temp[20:30,by=.5]","SEXO"))%>%
 data.frame()%>%
   mutate(across(c(predicted, conf.low, conf.high), exp)) %>%
   mutate(SE = (conf.high - conf.low) / (2 * 1.96))
+best_alldev_pred
+```
 
+
+<!-- Não lmebro para que serve essa parte do código 
 best_alldev_pred%>%
 group_by(group)%>%
   mutate(
     rank_min = min_rank(predicted),  # Classifica os valores por 'predicted'
     rank_max = dense_rank(desc(predicted))  # Classifica em ordem decrescente
   ) %>%
-  filter(rank_min <= 3 | rank_max <= 3) %>%  # Mantém valores com rank <= 3 em ambas as classificações
+  filter(rank_min <= 3 | rank_max <= 3) %>%  # Mantém valores com rank <= 3 em ambas as classificações (isso é, os 3 primeiros)
   ungroup()  # Desagrupa após a operação
+-->
 
 
+```{r message=FALSE, warning=FALSE}
 ggpredict(best_alldev_glm,,terms = c("temp[20:30,by=.5]","SEXO"))%>%
 data.frame()%>%
   mutate(across(c(predicted, conf.low, conf.high), exp)) %>%
@@ -238,12 +428,17 @@ data.frame()%>%
 group_by(group)%>%
   slice_min(order_by = predicted, n = 3)%>%
 relocate(group,x)
+```
 
-#----------------------------------------------------------
+# Development by stage
+
+## Piecewise model fitting
+
+We created an acessory function to help validate all models with one hit
+
+```{r}
 #	PIECEWISE MODEL FITTING
-#----------------------------------------------------------
-#	Acessory function to help validate all models with one hit
-#---
+
 Stand_residout<-function(X){
  simul<-DHARMa::simulateResiduals(X)
 	temp<-DHARMa::testResiduals(simul)
@@ -256,41 +451,66 @@ Stand_residout<-function(X){
 				temp$dispersion[[5]],
 				paste(temp$outliers[[3]])))
 return(out)}
-#-----------------------------------------------------------
+```
 
-# Model fitting
+Model fitting
+
+```{r, result='hide'}
 modL2_L1 <- glm(L2_L1 ~ temp+I(temp^2)+SEXO, data = dados_std)
 modL3_L2 <- glm(L3_L2 ~ temp+I(temp^2)+SEXO, data = dados_std)
 modL4_L3 <- glm(L4_L3 ~ temp+I(temp^2)+SEXO, data = dados_std)
 modPUPA_L4 <- glm(PUPA_L4 ~ temp+I(temp^2)+SEXO, data = dados_std)
 modADULTO_PUPA <- glm(ADULTO_PUPA ~ temp+I(temp^2)+SEXO, data = dados_std)
 
-
-
-
+# Include all models in a list
 mod_trans<-list(
   modL2_L1,
   modL3_L2,
   modL4_L3,
   modPUPA_L4,
   modADULTO_PUPA)
+```
 
-
+```{r message=FALSE, warning=FALSE, result='hide'}
+# Check its parameters
 lapply(mod_trans,Stand_residout)
 lapply(mod_trans,performance::r2)
 lapply(mod_trans,parameters::parameters)
+```
+
+Two models example 
 
 
+<!-- 
+esses dois exemplos não foram aleatórios
+ lembrar e descrever pq eles foram escolhidos
+-->
 
+```{r}
 plot_model(modL2_L1 , show.data = T , jitter = .3,
 	type = "pred", terms = c("temp[20:30]","SEXO"),transform)
+
 
 plot_model(modL3_L2 , show.data = T , jitter = .3,
 	type = "pred", terms = c("temp[20:30]","SEXO"))
 
-#-------------------------------------------------------------------------------
-#	Quantifying effect size of each parameter
-#-------------------------------------------------------------------------------
+```
+
+
+
+
+## Estimate the effect of variables on stages
+
+
+<!-- Bonferroni no longer used 
+ group_by(stats) %>%  # Agrupa por 'Stages' e 'stats'
+  mutate(p_adjusted = p.adjust(p, method = "bonferroni"))%>%
+mutate(p.value=ifelse(p_adjusted>=0.05,"Non-sig","sig"))
+-->
+
+
+
+```{r}
 stats<-c("Intercept","Temp","Temp_quad","SEXO")
 
 effect_temp<-lapply(
@@ -299,21 +519,21 @@ effect_temp<-lapply(
 					parameters::parameters),
 						data.frame,stats=stats)
 
-names(effect_temp)<-c("L2_L1","L3_L2","L3_L4","Pupa_L4","Adulto_Pupa")
+names(effect_temp)<-c("L1_L2","L2_L3","L3_L4","L4_Pupa","Pupa_Adulto")
 
 effect_temp<-effect_temp%>%bind_rows(.,.id="Stages")%>%as_tibble()%>%
 select( Stages,stats,Coefficient,SE,CI,CI_low,CI_high,p)%>%
 filter(stats!="Intercept")%>%
-mutate(p.value=ifelse(p>0.05,"Non-sig","sig"))
+mutate(p.value=ifelse(p>=0.05,"Non-sig","sig"))
 
 effect_temp
-#---------------------------
-#Bonferroni no longer used
- group_by(stats) %>%  # Agrupa por 'Stages' e 'stats'
-  mutate(p_adjusted = p.adjust(p, method = "bonferroni"))%>%
-mutate(p.value=ifelse(p_adjusted>=0.05,"Non-sig","sig"))
-#---------------------------
 
+```
+
+
+### Effect size by stage - plot
+
+```{r}
 effect_temp%>%
 filter(stats!="Intercept")%>%
 mutate(stats=ifelse(stats=="SEXO","diff F/M",stats))%>%
@@ -332,6 +552,7 @@ ylab("Estimated effect \non development")+xlab(NULL)+
 #theme(axis.text.x = element_text(angle = 75, vjust = 1, hjust=1))
 theme(axis.text.x = element_text(angle = 90, vjust = .5, hjust=1))+
 facet_wrap(.~stats,scales="free_y")
+```
 
 
 
