@@ -1,17 +1,17 @@
 ---
 title: "A general framework to run analyses in Dias et al.xxxxx"
 author:
-  - Gabriel Santos 
-  - Guilherme Sanches
+- Gabriel Santos
+- Guilherme Sanches
 date: "last time knit: `r format(Sys.time(),  '%Y-%m-%d (%H:%M:%S)')`"
-output: 
-  html_notebook:
-    theme: paper 
-    code_folding: hide    
-    toc: yes
+output:
+  html_document:
+    theme: paper
+    code_folding: hide
+    toc: true
     toc_float:
       collapsed: true
-    cache: FALSE
+    cache: false
 ---
 
 ```{r, echo=FALSE, cache=FALSE}
@@ -257,6 +257,8 @@ dados%>%
 
 Necessary step to reduce dispersion and make ontogenic stages comparable
 
+
+
 ```{r}
 # Log transformation to reduce dispersion
 dados_log<-dados %>%
@@ -275,11 +277,10 @@ dados_log
 ```
 
 
-
-<!--
-Aqui foi feito um modelo global onde Dias ~ temp + Sexo * Transition. 
-
 ## Model implementation and model selection
+
+
+```{r}
 
 #----------------------------------------------------------
 #	Global model
@@ -289,7 +290,7 @@ model_full<-glm(Days~temp+SEXO*Transition+I(temp^2)*SEXO*Transition,family="pois
 
 dredge(model_full)%>%head(n=5) 
 
-Select best model
+#Select best model
 # Extract best model according to AIC
 best_full<-model_full%>%
 	dredge%>%
@@ -307,14 +308,15 @@ plot_model(bestfull_glm, type = "pred", terms = c("temp[20:30]","Transition"),sh
 
 
 #### Full model did not pass model assumptions
-Uniformity: not passed
-Dispersion: passed
-Outliers: not passed
+#Uniformity: not passed
+#Dispersion: passed
+#Outliers: not passed
 
 
 simulateResiduals(bestfull_glm, plot =F)%>%testResiduals()
 
--->
+
+```
 
 
 
@@ -346,10 +348,17 @@ dredge_out
 
 ```{r}
 best_alldev<-get.models(dredge_out, subset = 1)
-
-best_alldev[[1]]%>%parameters::parameters()
+best_alldev[[1]]%>%parameters::parameters(exponentiate=FALSE) 
 best_alldev[[1]]%>%anova()
 ```
+
+```{r}
+# Effect of the sex 
+(best_alldev[[1]]%>%parameters::parameters(exponentiate =TRUE))[2,]
+```
+
+<!--"exponentiate =TRUE" Effect of the sex expoential for better biological meaning --> 
+
 
 <!-- 
 #Warning message "Context: nKcase - wrong family"
@@ -368,12 +377,14 @@ Ainda que o modelo não tenha se adequado a todos os pressupostos, essa diferen�
 hist(best_alldev[[1]]$residuals,xlab="Residuals",main=NULL)
 ```
 
+```{r}
+best_alldev_glm<-best_alldev[[1]]
+```
 
 
 ### Plot
 
 ```{r message=FALSE, warning=FALSE}
-
 plot_model(best_alldev_glm, show.data = T , jitter = .3,
 	type = "pred", terms = c("temp[20:30]","SEXO"),transform)+
 labs(x="Temperature",
@@ -389,9 +400,12 @@ theme_bw(base_size=16)+
 #    labels = function(x) scales::label_number()(exp(x)))+
   scale_x_continuous(
     breaks = seq(20,30,by=5))
+
 ```
 
-Valores preditos
+
+
+### Valores preditos
 
 ```{r message=FALSE, warning=FALSE}
 ggpredict(best_alldev_glm,,terms = c("temp[20,25,30]"))%>%
@@ -404,6 +418,8 @@ best_alldev_pred<-ggpredict(best_alldev_glm,,terms = c("temp[20:30,by=.5]","SEXO
 data.frame()%>%
   mutate(across(c(predicted, conf.low, conf.high), exp)) %>%
   mutate(SE = (conf.high - conf.low) / (2 * 1.96))
+
+
 best_alldev_pred
 ```
 
@@ -429,7 +445,6 @@ group_by(group)%>%
   slice_min(order_by = predicted, n = 3)%>%
 relocate(group,x)
 ```
-
 # Development by stage
 
 ## Piecewise model fitting
@@ -473,9 +488,9 @@ mod_trans<-list(
 
 ```{r message=FALSE, warning=FALSE, result='hide'}
 # Check its parameters
-lapply(mod_trans,Stand_residout)
-lapply(mod_trans,performance::r2)
-lapply(mod_trans,parameters::parameters)
+lapply(mod_trans,Stand_residout) # Check residuals
+lapply(mod_trans,performance::r2) #Check R² for each model
+lapply(mod_trans,parameters::parameters) # Extract parameters for each model
 ```
 
 Two models example 
@@ -500,15 +515,6 @@ plot_model(modL3_L2 , show.data = T , jitter = .3,
 
 
 ## Estimate the effect of variables on stages
-
-
-<!-- Bonferroni no longer used 
- group_by(stats) %>%  # Agrupa por 'Stages' e 'stats'
-  mutate(p_adjusted = p.adjust(p, method = "bonferroni"))%>%
-mutate(p.value=ifelse(p_adjusted>=0.05,"Non-sig","sig"))
--->
-
-
 
 ```{r}
 stats<-c("Intercept","Temp","Temp_quad","SEXO")
@@ -553,6 +559,4 @@ ylab("Estimated effect \non development")+xlab(NULL)+
 theme(axis.text.x = element_text(angle = 90, vjust = .5, hjust=1))+
 facet_wrap(.~stats,scales="free_y")
 ```
-
-
 
